@@ -73,3 +73,9 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Third Party Plugins like PrimeTween
+/[Aa]ssets/[Pp]lugins/
+
+# Third Party Assets (Not used since Kenney is the goat and it's all CCO but you should add this to your own projects when you use git and paid assets)
+# /[Aa]ssets/_[Tt]hird[Pp]arty/
