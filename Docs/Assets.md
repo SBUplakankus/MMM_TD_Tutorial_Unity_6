@@ -1,10 +1,12 @@
 # Course Assets
 
 ## Visual Assets
-| Asset | Source | License | Notes                             |
-|-------|--------|---------|-----------------------------------|
-| Tower Defense Kit | [Kenney.nl](https://kenney.nl/assets/tower-defense-kit) | CC0 1.0 | Main game models, towers, enemies |
+| Asset              | Source                                                   | License | Notes                             |
+|--------------------|----------------------------------------------------------|---------|-----------------------------------|
+| Tower Defense Kit  | [Kenney.nl](https://kenney.nl/assets/tower-defense-kit)  | CC0 1.0 | Main game models, towers, enemies |
 | Fantasy UI Borders | [Kenney.nl](https://kenney.nl/assets/fantasy-ui-borders) | CC0 1.0 | UI panels, borders, frames        |
+| Cursors            | [Kenney.nl](https://kenney.nl/assets/cursor-pack)        | CC0 1.0 | Custom cursors                    |
+| UI Icons           | [GameIcons](https://game-icons.net/)        | CC-BY | UI Icons                          |
 
 ## Audio Assets
 | Asset | Source | License | Notes |
