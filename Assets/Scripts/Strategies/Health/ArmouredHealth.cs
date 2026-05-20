@@ -1,25 +1,32 @@
-﻿using Enemies.Controllers;
-using Strategies.Health;
-using UnityEngine;
+﻿using Interfaces;
 
 namespace Strategies.Health
 {
-[CreateAssetMenu(menuName = "Strategies/Health/Armoured")]
-    public class ArmouredHealth : HealthStrategy
+    // TODO: Plain class implementing IHealthStrategy — no longer a ScriptableObject
+    // Constructor takes (int startHealth, float armourPercent)
+    // Holds: _startHealth, _armourPercent, _currentHealth
+    // TakeDamage() reduces amount by (1 - armourPercent), returns DamageResult
+    // Tick() is empty
+    public class ArmouredHealth : IHealthStrategy
     {
-        [Range(0, 0.99f)] 
-        [SerializeField] private float armourPercent = 0.2f;
-        
-        public override void Initialize(EnemyController enemy)
+        // TODO: Implement IHealthStrategy
+        public void Initialize()
         {
-            InitHealth();
+            throw new System.NotImplementedException();
         }
 
-        public override void TakeDamage(EnemyController enemy, float amount)
+        public DamageResult TakeDamage(float amount)
         {
-            var reducedDamage = amount * (1f - armourPercent);
-            CurrentHealth -= reducedDamage;
-            CheckForDeath();
+            throw new System.NotImplementedException();
         }
+
+        public void Tick(float deltaTime)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public bool IsAlive { get; }
+        public float CurrentHealth { get; }
+        public float MaxHealth { get; }
     }
 }

@@ -1,48 +1,29 @@
-﻿using Enemies.Controllers;
+﻿using System;
+using Enemies.Controllers;
+using Interfaces;
 using UnityEngine;
 
 namespace Strategies.Movement
 {
-    public class FlyingPath : MovementStrategy
+    // TODO: Plain class implementing IMovementStrategy — no longer a ScriptableObject
+    // Constructor takes (float moveSpeed, float flyingHeight)
+    // Holds: _moveSpeed, _flyingHeight, _path (EnemyPath reference)
+    // Initialize(enemy): same as GroundedPath but Y offset by _flyingHeight
+    // Tick(enemy): same as GroundedPath but target Y is waypoint Y + _flyingHeight
+    //   Uses IsAtWaypoint(targetPosition, enemyPosition) overload (not index-based)
+    public class FlyingPath : IMovementStrategy
     {
-        [SerializeField] [Range(0, 5)] private float flyingHeight;
-        
-        public override void Initialize(EnemyController enemy)
+        // TODO: Implement IMovementStrategy
+        public void Initialize(EnemyController enemy)
         {
-            base.Initialize(enemy);
-            SetStartPosition(enemy);
+            throw new NotImplementedException();
         }
 
-        protected override void SetStartPosition(EnemyController enemy)
+        public void Tick(EnemyController enemy)
         {
-            var pos = Path.StartPosition;
-            pos.y += flyingHeight;
-            enemy.transform.position = pos;
+            throw new NotImplementedException();
         }
 
-        public override void Tick(EnemyController enemy)
-        {
-            var index = enemy.CurrentWayPointIndex;
-
-            if (!Path.HasWaypoint(index))
-            {
-                CompleteMovement();
-                return;
-            }
-
-            var target = Path.GetWaypointPosition(index);
-            target.y += flyingHeight;
-
-            enemy.transform.position = Vector3.MoveTowards(
-                enemy.transform.position,
-                target,
-                moveSpeed * Time.deltaTime
-            );
-
-            if (Path.IsAtWaypoint(target, enemy.transform.position))
-            {
-                enemy.CurrentWayPointIndex++;
-            }
-        }
+        public event Action OnMovementCompleted;
     }
 }

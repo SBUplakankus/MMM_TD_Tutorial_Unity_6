@@ -1,20 +1,33 @@
-﻿using Enemies.Controllers;
-using UnityEngine;
+﻿using Interfaces;
 
 namespace Strategies.Health
 {
-    [CreateAssetMenu(menuName = "Strategies/Health/Normal")]
-    public class NormalHealth : HealthStrategy
+    // TODO: Plain class implementing IHealthStrategy — no longer a ScriptableObject
+    // Constructor takes (int startHealth)
+    // Holds: _startHealth, _currentHealth
+    // Initialize() sets _currentHealth = _startHealth
+    // TakeDamage() subtracts amount, returns DamageResult.Dead/Alive based on _currentHealth
+    // Tick() is empty — no per-frame logic needed
+    public class NormalHealth : IHealthStrategy
     {
-        public override void Initialize(EnemyController enemy)
+        // TODO: Implement IHealthStrategy
+        public void Initialize()
         {
-            InitHealth();
+            throw new System.NotImplementedException();
         }
 
-        public override void TakeDamage(EnemyController enemy, float amount)
+        public DamageResult TakeDamage(float amount)
         {
-            CurrentHealth -= amount;
-            CheckForDeath();
+            throw new System.NotImplementedException();
         }
+
+        public void Tick(float deltaTime)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public bool IsAlive { get; }
+        public float CurrentHealth { get; }
+        public float MaxHealth { get; }
     }
 }

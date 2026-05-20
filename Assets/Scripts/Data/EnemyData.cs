@@ -1,5 +1,3 @@
-using Strategies.Health;
-using Strategies.Movement;
 using UnityEngine;
 
 namespace Data
@@ -8,24 +6,24 @@ namespace Data
     public class EnemyData : ScriptableObject
     {
         #region Fields
-        
-        [Header("Enemy Strategies")]
-        [SerializeField] private HealthStrategy health;
-        [SerializeField] private MovementStrategy movement;
-        
+
+        [Header("Enemy Config")]
+        [SerializeField] private HealthConfig healthConfig;
+        [SerializeField] private MovementConfig movementConfig;
+
         [Header("Enemy Stats")]
         [SerializeField] private int goldGiven;
         [SerializeField] private int damage;
 
         #endregion
-        
+
         #region Properties
-        
-        public HealthStrategy Health => health;
-        public MovementStrategy Movement   => movement;
+
+        public HealthConfig HealthConfig => healthConfig;
+        public MovementConfig MovementConfig => movementConfig;
         public int GoldGiven => goldGiven;
         public int Damage => damage;
-        
+
         #endregion
     }
 }

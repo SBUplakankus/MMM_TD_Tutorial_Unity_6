@@ -1,43 +1,30 @@
-﻿using Enemies.Controllers;
+﻿using System;
+using Enemies.Controllers;
+using Interfaces;
 using UnityEngine;
 
 namespace Strategies.Movement
 {
-    public class GroundedPath : MovementStrategy
+    // TODO: Plain class implementing IMovementStrategy — no longer a ScriptableObject
+    // Constructor takes (float moveSpeed)
+    // Holds: _moveSpeed, _path (EnemyPath reference)
+    // Initialize(enemy): store enemy.Path, set waypoint index to 0, set position to path.StartPosition
+    // Tick(enemy): move toward current waypoint at _moveSpeed * Time.deltaTime
+    //   If no more waypoints, fire OnMovementCompleted
+    //   If at waypoint, increment CurrentWayPointIndex
+    public class GroundedPath : IMovementStrategy
     {
-        public override void Initialize(EnemyController enemy)
+        // TODO: Implement IMovementStrategy
+        public void Initialize(EnemyController enemy)
         {
-            base.Initialize(enemy);
-            SetStartPosition(enemy);
+            throw new NotImplementedException();
         }
 
-        protected override void SetStartPosition(EnemyController enemy)
+        public void Tick(EnemyController enemy)
         {
-            enemy.transform.position = Path.StartPosition;
+            throw new NotImplementedException();
         }
 
-        public override void Tick(EnemyController enemy)
-        {
-            var index = enemy.CurrentWayPointIndex;
-
-            if (!Path.HasWaypoint(index))
-            {
-                CompleteMovement();
-                return;
-            }
-
-            var target = Path.GetWaypointPosition(index);
-
-            enemy.transform.position = Vector3.MoveTowards(
-                enemy.transform.position,
-                target,
-                moveSpeed * Time.deltaTime
-            );
-
-            if (Path.IsAtWaypoint(index, enemy.transform.position))
-            {
-                enemy.CurrentWayPointIndex++;
-            }
-        }
+        public event Action OnMovementCompleted;
     }
 }
