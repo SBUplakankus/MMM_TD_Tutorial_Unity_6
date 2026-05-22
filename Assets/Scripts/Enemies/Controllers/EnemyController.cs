@@ -1,85 +1,68 @@
-using Core;
-using Data;
-using Enemies.Components;
-using Events.Registries;
-using Interfaces;
 using Systems.Game;
-using Systems.Parsing;
 using UnityEngine;
 
 namespace Enemies.Controllers
 {
-    public class EnemyController : MonoBehaviour, IDamageable, ITargetable
+    public class EnemyController : MonoBehaviour
     {
-        #region Fields
+        // Episode 01: Basic movement along EnemyPath waypoints
+        //   [SerializeField] float moveSpeed, EnemyPath path
+        //   Start: snap to path start, set waypoint index
+        //   Update: MoveTowards waypoint, advance on arrival, Destroy at end
+        //
+        // Episode 02: Add IDamageable + ITargetable, inline health, health bar
+        //   [SerializeField] float startHealth, EnemyHealthBar healthBar
+        //   Add _currentHealth, IsAlive, Position, TakeDamage, Die()
+        //
+        // Episode 05: Player economy calls in Die() and OnReachedEnd()
+        //   PlayerStats.Instance.AddGold / SubtractLives
+        //
+        // Episode 06: Delegate movement to IMovementStrategy
+        //   Add Initialize(EnemyData, EnemyPath), Path and CurrentWayPointIndex public props
+        //   Remove inline MoveTowards, call Movement.Tick(this)
+        //
+        // Episode 07: Delegate health to IHealthStrategy
+        //   Replace _currentHealth with IHealthStrategy Health property
+        //   TakeDamage calls Health.TakeDamage, check DamageResult.Died
+        //   Add Health.Tick(Time.deltaTime) in Update
+        //
+        // Episode 08: Object pooling — add IPoolable, replace Destroy with pool Return
+        //   Implement Reset() to clear all runtime state
+        //
+        // Episode 09: Replace .Instance with Services.Get<T>()
+        //
+        // Episode 10: Replace direct PlayerStats calls with CombatEvents.Raise()
+        //   Cache services in OnEnable (runs on pool reactivation)
+        //
+        // Episode 13: Add PathProgress and CurrentHealth to ITargetable
 
-        [Header("Enemy UI")]
-        [SerializeField] private EnemyHealthBar healthBar;
+        [SerializeField] private float moveSpeed = 5f;
+        [SerializeField] private EnemyPath path;
 
-        #endregion
+        private int _currentWaypointIndex;
 
-        #region Properties
-
-        public EnemyPath Path { get; private set; }
-        public int CurrentWayPointIndex { get; set; }
-        public IHealthStrategy Health { get; private set; }
-        public IMovementStrategy Movement { get; private set; }
-        public int GoldGiven { get; private set; }
-        public int Damage { get; private set; }
-
-        public Vector3 Position => transform.position;
-        public bool IsAlive => Health != null && Health.IsAlive;
-
-        #endregion
-
-        #region Class Methods
-
-        public void Initialize(EnemyData data, EnemyPath path)
+        private void Start()
         {
-            // TODO: Store Path reference
-            // TODO: Create strategies via StrategyFactory
-            // TODO: Store GoldGiven and Damage from data
-            // TODO: Call Health.Initialize() and Movement.Initialize(this)
-            // TODO: Subscribe to Movement.OnMovementCompleted → OnReachedEnd
+            _currentWaypointIndex = 0;
+            transform.position = path.StartPosition;
         }
-
-        public void Die()
-        {
-            // TODO: Raise Services.Get<CombatEvents>().EnemyDeath.Raise(GoldGiven)
-            // TODO: Unsubscribe from Movement.OnMovementCompleted
-            // TODO: Return to pool via Services.Get<ObjectPoolManager>().Return("enemy", gameObject)
-        }
-
-        #endregion
-
-        #region Unity Methods
 
         private void Update()
         {
-            // TODO: Call Health.Tick(Time.deltaTime)
-            // TODO: Call Movement.Tick(this)
+            if(!path) return;
+
+            if (!path.HasWaypoint(_currentWaypointIndex))
+            {
+                Destroy(gameObject);
+                return;
+            }
+            
+            var target = path.GetWaypointPosition(_currentWaypointIndex);
+            transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
+            transform.LookAt(target);
+
+            if (path.IsAtWaypoint(_currentWaypointIndex, transform.position))
+                _currentWaypointIndex++;
         }
-
-        #endregion
-
-        #region IDamageable
-
-        public void TakeDamage(float damage)
-        {
-            // TODO: Call Health.TakeDamage(damage) — returns DamageResult
-            // TODO: If result.Died, call Die()
-        }
-
-        #endregion
-
-        #region Private Methods
-
-        private void OnReachedEnd()
-        {
-            // TODO: Raise Services.Get<CombatEvents>().EnemyReachedEnd.Raise(Damage)
-            // TODO: Return to pool
-        }
-
-        #endregion
     }
 }

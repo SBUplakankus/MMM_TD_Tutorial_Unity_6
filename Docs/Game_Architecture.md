@@ -1,7 +1,7 @@
 # Game Architecture
 
 ## Project Overview
-This tower defense game implements intermediate Unity patterns with a focus on clean architecture, performance optimization, and maintainability.
+This tower defense game teaches intermediate Unity patterns with a focus on clean architecture, performance optimization, and maintainability. Each concept is introduced one at a time — naive implementation first, then refactor to the pattern.
 
 ---
 
@@ -9,41 +9,54 @@ This tower defense game implements intermediate Unity patterns with a focus on c
 
 | System | Purpose | Key Components | Pattern Used |
 |--------|---------|----------------|--------------|
-| **Event System** | Decouple game systems through event-driven communication | `VoidEventChannel`, `TypedEventChannel<T>`, `AudioEventLinker` | Observer Pattern |
-| **Data Management** | Data-driven design for game balancing | `EnemyData`, `AudioData`, `AudioEventLinker` ScriptableObjects | ScriptableObjects |
+| **Strategy System** | Compose enemy behaviors without inheritance | `IHealthStrategy`, `IMovementStrategy`, `ITargetingStrategy`, `StrategyFactory` | Strategy Pattern |
+| **Service Locator** | Centralized access to managers and registries | `Services`, `GameBootstrapper` | Service Locator |
+| **Event System** | Decouple game systems through event-driven communication | `EventChannel<T>`, `EventChannel`, registry classes | Observer Pattern |
 | **Object Pooling** | Optimize performance by reusing objects | `ObjectPoolManager`, `PoolConfig`, `IPoolable` | Object Pool Pattern |
-| **Update Manager** | Control update frequency for performance | `UpdateManager`, `IUpdatable` interface | Custom Update System |
-| **Game Constants** | Centralize configuration values | `GameConstants` static class | Constants Pattern |
-| **Strategy System** | Compose enemy behaviors without inheritance | `HealthStrategy`, `MovementStrategy`, `TargetingStrategy` | Strategy Pattern |
-| **Audio Middleware** | Event-driven, data-driven audio with no singletons | `AudioController`, `AudioPoolHandler`, `AudioEventLinker` | Event-Driven Audio |
+| **Data Management** | Data-driven design for game balancing | `HealthConfig`, `MovementConfig`, `EnemyData`, `AudioData` | Data-Driven SOs |
+| **Wave System** | Data-driven wave spawning from CSV | `CsvWaveParser`, `WaveManager`, `EnemySpawner` | Data Parsing |
+| **Audio Middleware** | Event-driven, pooled audio | `AudioController`, `AudioPoolHandler` | Event-Driven Audio |
+| **Update Manager** | Control update frequency for performance | `UpdateManager`, `IUpdatable` | Custom Update System |
 
 ---
 
 ## Data Flow Architecture
 
 ```
-┌─────────────┐    Events    ┌─────────────┐
-│   Towers    │──────────────▶│    UI       │
-└─────────────┘              └─────────────┘
-        │                          ▲
-        ▼ (Projectiles)           │ (Gold/Health Updates)
-┌─────────────┐    Events    ┌─────────────┐
-│   Enemies   │──────────────▶│  PlayerStats│
-└─────────────┘              └─────────────┘
-        │                          │
-        ▼ (Wave Events)            ▼ (Purchase Events)
-┌─────────────┐              ┌─────────────┐
-│Wave Manager │◀─────────────│ Tower Shop  │
-└─────────────┘    Events    └─────────────┘
-        │
-        ▼ (CSV Parse)
+┌─────────────┐   Services    ┌──────────────┐
+│GameBootstrapper│────────────▶│   Services   │
+└─────────────┘              └──────────────┘
+         │                          │
+         │ registers                │ Get<T>()
+         ▼                          ▼
+┌─────────────┐              ┌──────────────┐
+│ObjectPool   │              │Event Registries│
+│  Manager    │              │ Combat/Wave/  │
+│  Manager    │              │ Economy/Game  │
+└─────────────┘              └──────────────┘
+
+┌─────────────┐  EventChannel  ┌─────────────┐
+│   Towers    │───────────────▶│    UI       │
+└─────────────┘                └─────────────┘
+         │                            ▲
+         ▼ (Projectiles)             │ (Gold/Lives)
+┌─────────────┐  EventChannel  ┌─────────────┐
+│   Enemies   │───────────────▶│ PlayerStats │
+└─────────────┘                └─────────────┘
+         │                            │
+         ▼ (WaveEvents)               ▼ (EconomyEvents)
+┌─────────────┐                ┌─────────────┐
+│Wave Manager │◀───────────────│ Tower Shop  │
+└─────────────┘  EventChannel   └─────────────┘
+         │
+         ▼ (CSV Parse)
 ┌─────────────┐
-│Enemy Spawner│──▶ ObjectPoolManager ──▶ EnemyController
+│Enemy Spawner│──▶ Services.Get<ObjectPoolManager>() ──▶ EnemyController
 └─────────────┘
 
-┌─────────────┐    EventLinkers   ┌──────────────┐
-│ Game Events │──────────────────▶│AudioController│──▶ AudioPoolHandler
-└─────────────┘                   └──────────────┘    └▶ AudioMixer Groups
+┌─────────────┐  Services.Get<CombatEvents>()  ┌──────────────┐
+│ Game Events │────────────────────────────────▶│AudioController│──▶ AudioPoolHandler
+└─────────────┘                                  └──────────────┘    └▶ AudioMixer Groups
 ```
 
 ---
@@ -55,23 +68,34 @@ Assets/
 ├── Scripts/
 │   ├── Audio/                     # Audio middleware
 │   │   ├── AudioPoolHandler.cs
-│   │   └── AudioEventLinker.cs
-│   ├── Base/                      # Shared components
-│   │   └── HealthComponent.cs
-│   ├── Data/                      # ScriptableObject definitions
+│   │   └── AudioController.cs    # Subscribes to event registries
+│   ├── Core/                      # Service locator & bootstrapper
+│   │   ├── Services.cs           # Static service locator
+│   │   └── GameBootstrapper.cs   # Composition root
+│   ├── Data/                      # ScriptableObject configs (pure data)
 │   │   ├── AudioData.cs
-│   │   └── EnemyData.cs
+│   │   ├── DamageResult.cs       # Readonly struct for TakeDamage return
+│   │   ├── EnemyData.cs          # Holds HealthConfig + MovementConfig refs
+│   │   ├── HealthConfig.cs       # Pure config SO + HealthType enum
+│   │   └── MovementConfig.cs     # Pure config SO + MovementType enum
 │   ├── Enemies/                   # Enemy system
 │   │   ├── Components/
-│   │   │   └── EnemyHealthbar.cs
+│   │   │   └── EnemyHealthBar.cs
 │   │   └── Controllers/
-│   │       └── EnemyController.cs
-│   ├── Events/                    # SO event channels
-│   │   ├── EventChannelBase.cs
-│   │   ├── VoidEventChannel.cs
-│   │   └── TypedEventChannel.cs
+│   │       └── EnemyController.cs # Implements IDamageable, ITargetable, IPoolable
+│   ├── Events/                    # Pure C# event channels
+│   │   ├── EventChannel.cs       # Void variant
+│   │   ├── EventChannelT.cs      # Typed variant <T>
+│   │   └── Registries/           # Feature-organized event containers
+│   │       ├── CombatEvents.cs
+│   │       ├── WaveEvents.cs
+│   │       ├── EconomyEvents.cs
+│   │       └── GameEvents.cs
 │   ├── Interfaces/                # Behavior contracts
 │   │   ├── IDamageable.cs
+│   │   ├── IHealthStrategy.cs
+│   │   ├── IMovementStrategy.cs
+│   │   ├── ITargetingStrategy.cs
 │   │   ├── IPoolable.cs
 │   │   ├── ISelectable.cs
 │   │   ├── ITargetable.cs
@@ -80,40 +104,40 @@ Assets/
 │   │   ├── ProjectileBase.cs
 │   │   ├── ArrowProjectile.cs
 │   │   └── BombProjectile.cs
-│   ├── Strategies/                # Strategy pattern implementations
+│   ├── Strategies/                # Strategy pattern implementations (plain C# classes)
 │   │   ├── Health/
-│   │   │   ├── HealthStrategy.cs
 │   │   │   ├── NormalHealth.cs
 │   │   │   ├── ArmouredHealth.cs
 │   │   │   ├── ShieldHealth.cs
 │   │   │   └── RegenHealth.cs
 │   │   ├── Movement/
-│   │   │   ├── MovementStrategy.cs
 │   │   │   ├── GroundedPath.cs
 │   │   │   └── FlyingPath.cs
 │   │   └── Targeting/
-│   │       └── TargetingStrategy.cs
+│   │       ├── FirstTargeting.cs
+│   │       ├── LastTargeting.cs
+│   │       ├── StrongTargeting.cs
+│   │       └── CloseTargeting.cs
 │   ├── Systems/                   # Game systems and managers
 │   │   ├── Game/
 │   │   │   ├── AudioController.cs
 │   │   │   ├── EnemyPath.cs
 │   │   │   ├── EnemySpawner.cs
-│   │   │   ├── PlayerStats.cs
+│   │   │   ├── PlayerStats.cs    # Plain C# class, registered in Services
 │   │   │   ├── ShopController.cs
 │   │   │   └── TowerNode.cs
 │   │   ├── Managers/
-│   │   │   ├── EnemyManager.cs
-│   │   │   ├── ObjectPoolManager.cs
-│   │   │   ├── TowerManager.cs
-│   │   │   ├── UpdateManager.cs
+│   │   │   ├── ObjectPoolManager.cs  # Registered in Services
+│   │   │   ├── UpdateManager.cs      # Registered in Services
 │   │   │   └── WaveManager.cs
 │   │   └── Parsing/
-│   │       └── CsvWaveParser.cs
+│   │       ├── CsvWaveParser.cs
+│   │       └── StrategyFactory.cs    # Creates strategies from config enum
 │   └── Towers/                    # Tower system
 │       ├── TowerController.cs
 │       ├── TowerDetection.cs
 │       └── TowerFiring.cs
-├── Data/                          # SO asset instances
+├── Data/                          # SO asset instances + CSV
 │   └── Waves/
 │       └── wave_data.csv
 ├── Prefabs/
@@ -126,24 +150,29 @@ Assets/
 
 ## Key Design Decisions
 
-### 1. Event-Driven Communication
-- **Why**: Decouples systems for better maintainability
-- **Implementation**: ScriptableObject Event Channels + AudioEventLinker
-- **Benefit**: Easy testing and system isolation, zero singletons for audio
+### 1. Pure C# Interfaces + Factory (NOT Abstract ScriptableObjects)
+- **Why**: SOs are shared references — `CurrentHealth` on a health strategy SO would be shared across all enemies using that SO
+- **Implementation**: `IHealthStrategy`, `IMovementStrategy`, `ITargetingStrategy` as pure interfaces. `StrategyFactory` creates instances from `HealthConfig`/`MovementConfig` type enums
+- **Benefit**: Each enemy gets its own strategy instance, no shared-state bug, no `Instantiate()` workaround needed
 
-### 2. Data-Driven Design
-- **Why**: Non-programmer friendly balancing
-- **Implementation**: ScriptableObjects for all configurable data, CSV for wave data
-- **Benefit**: Quick iteration without code changes, runtime wave editing
+### 2. Pure C# Event Channels (NOT ScriptableObject Events)
+- **Why**: SO event channels require .asset files, cause merge conflicts, and can't be easily tested
+- **Implementation**: `EventChannel<T>` and `EventChannel` base classes, organized into registries (`CombatEvents`, `WaveEvents`, etc.) registered in `Services`
+- **Benefit**: No missing references, no merge conflicts, reusable across engines/languages, consistent `Services.Get<T>()` access
 
-### 3. Strategy Pattern Composition
+### 3. Service Locator (NOT Multiple Singletons)
+- **Why**: Scattered `.Instance` singletons create tight coupling and inconsistent access patterns
+- **Implementation**: `Services` static class with `Register<T>`/`Get<T>`/`Clear`. `GameBootstrapper` as composition root
+- **Benefit**: One access pattern for everything, easy to test and swap, upgrade path to DI
+
+### 4. Strategy Pattern Composition
 - **Why**: Add enemy/tower behaviors without modifying existing code
-- **Implementation**: Abstract Strategy SOs for Health, Movement, Targeting
-- **Benefit**: Mix-and-match strategies to create new types from existing pieces
+- **Implementation**: Plain C# classes implementing strategy interfaces, created by `StrategyFactory`
+- **Benefit**: New types = new config + factory case. Zero changes to `EnemyController`, `TowerDetection`, `ProjectileBase`
 
-### 4. Performance Optimizations
-- **Custom Update Manager**: Reduces unnecessary Update() calls
-- **Object Pooling**: Eliminates Instantiate/Destroy overhead
+### 5. Performance Optimizations
+- **Custom Update Manager**: Batched updates by priority (High/Medium/Low tick intervals)
+- **Object Pooling**: Eliminates Instantiate/Destroy overhead and GC spikes
 - **Interface-based Systems**: Enables efficient targeting and damage
 - **Pooled AudioSource**: Eliminates one-shot SFX allocation spikes
 
@@ -153,26 +182,24 @@ Assets/
 
 ### Tower Placement Flow:
 1. Player selects tower in `TowerShop` UI
-2. `TowerPlacement` system activates with tower data
-3. Valid placement triggers `OnTowerPlaced` event
-4. `PlayerStats` deducts gold (listens to event)
-5. `AudioController` plays build sound (via AudioEventLinker)
-6. UI updates display (listens to event)
+2. `TowerNode` places tower at valid position
+3. `GameEvents.TowerPlaced.Raise()` via Services
+4. `PlayerStats` deducts gold (subscribes to `EconomyEvents.GoldChanged`)
 
 ### Enemy Death Flow:
 1. Tower projectile hits enemy
-2. Enemy triggers `OnEnemyDeath` event with reward value
-3. `PlayerStats` adds gold (listener)
-4. `WaveManager` tracks remaining enemies (listener)
-5. `AudioController` plays death sound (via AudioEventLinker)
-6. Object Pool returns enemy to pool
+2. `IHealthStrategy.TakeDamage()` returns `DamageResult` with `Died = true`
+3. `EnemyController.Die()` raises `Services.Get<CombatEvents>().EnemyDeath.Raise(GoldGiven)`
+4. `PlayerStats` adds gold (subscribes to `CombatEvents.EnemyDeath`)
+5. `AudioController` plays death sound (subscribes to `CombatEvents.EnemyDeath`)
+6. `ObjectPoolManager` returns enemy to pool
 
 ### Wave Start Flow:
-1. `WaveManager.StartNextWave()` parses next wave batch
-2. Passes batch entries to `EnemySpawner.StartBatch()`
+1. `WaveManager.StartNextWave()` parses next wave batch from CSV
+2. Passes batch entries to `EnemySpawner.StartBatch(entries, path)`
 3. Spawner starts coroutines per entry with spawn intervals
-4. Each spawn fetches from `ObjectPoolManager`
-5. `OnWaveStarted` event raised for UI and audio
+4. Each spawn fetches from `Services.Get<ObjectPoolManager>()`
+5. `Services.Get<WaveEvents>().WaveStarted.Raise(waveNumber)`
 
 ---
 
@@ -186,5 +213,4 @@ Assets/
 | **Data Access** | Cached ScriptableObject references | Faster than Resources.Load |
 | **Audio Pooling** | Pooled one-shot AudioSource | No allocation per sound play |
 | **CSV Parsing** | One-time parse on Awake | No runtime parsing overhead |
-
----
+| **Service Locator** | Dictionary lookup | Negligible vs direct reference |

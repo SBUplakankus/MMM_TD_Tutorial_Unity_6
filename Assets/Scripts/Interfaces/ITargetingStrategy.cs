@@ -1,11 +1,11 @@
-using System.Collections.Generic;
+using Interfaces;
 using UnityEngine;
 
-namespace Interfaces
+namespace Strategies.Targeting
 {
+    // TODO: Episode 13 — ITargetingStrategy: GetTarget(IEnumerable<ITargetable>, Vector3 towerPosition)
+
     public interface ITargetingStrategy
     {
-        // TODO: GetTarget — select best target from valid ITargetables based on strategy logic
-        ITargetable GetTarget(IEnumerable<ITargetable> targets, Vector3 towerPosition);
     }
 }

@@ -1,44 +1,47 @@
 # Interfaces
 
-## Purpose
+## Overview
+A contract that defines what a class can do, without saying how it does it. Methods and properties with no implementation.
 
-Interfaces allow us to define what an object can do without defining how it does it.
-Essentially, it forces classes to implement a specific set of functions that other systems can rely on
+## Why Use It
+- **Decoupling** — depend on the contract, not the concrete class
+- **Testability** — mock implementations for unit tests
+- **Flexibility** — swap implementations without changing consumers
+- **Composition** — a class can implement multiple interfaces (IDamageable AND ITargetable)
 
-For example all enemies will need to implement IDamageable and have a function called TakeDamage, otherwise the game wouldn't work.
+## When Not to Use
+- Only one implementation will ever exist
+- The interface has only one method and the class is trivially small
+- You're creating interfaces for every class "just in case" (YAGNI)
 
----
+## In This Project
+- `IDamageable` — anything that can take damage (enemies, destructible props)
+- `ITargetable` — anything a tower can target (enemies)
+- `IPoolable` — anything that can be reset and returned to an object pool
+- `IHealthStrategy` — health behavior contract (Normal, Armoured, Shield, Regen)
+- `IMovementStrategy` — movement behavior contract (Grounded, Flying)
+- `ITargetingStrategy` — targeting behavior contract (First, Last, Strong, Close)
 
-## Implementation
+## Code Example
+```csharp
+public interface IDamageable
+{
+    void TakeDamage(float amount);
+}
 
-### IDamageable
+public interface ITargetable
+{
+    Vector3 Position { get; }
+    bool IsAlive { get; }
+    float PathProgress { get; }
+}
 
-The `IDamageable` interface defines anything that can **receive damage**.
+// TowerDetection works with ANY ITargetable
+// It doesn't know or care about EnemyController
+private ITargetable SelectTarget()
+{
+    return _targetingStrategy.GetTarget(_targetsInRange, transform.position);
+}
+```
 
-This will be used by enemies so that when projectiles come into contact with them, they can do damage.
-
-This lets us differentiate enemies from environmental obstacles or other towers the projectile might hit.
-
-### ITargetable
-
-The `ITargetable` interface defines anything that can be **targeted by towers**.
-
-Towers will scan for any objects that contain ITargetable in their range before sorting them based on their given attack priority. 
-
-This prevents any non-targetable objects interfering being mistaken for valid targets.
-
-### IPlaceable
-
-The `IPlaceable` interface defines anything that can be **placed on the map by the player**.
-
-For this project it will only refer to towers, but you could easily use this to define barriers or traps to be placed on the map to assist you.
-
-### IUpdateable
-
-The `IUpdateable` interface defines anything that can be updated through the Game Update Manager.
-
-Since we are implementing our own Updates and not using the built in MonoBehaviour Update, we need to add this interface to any objects that can be updated.
-
-The Update Manager then iterates through all subscribed objects each frame.
-
----
+Related: [Strategy Pattern](Strategy_Pattern.md) | [Observer Pattern](Observer_Pattern.md)

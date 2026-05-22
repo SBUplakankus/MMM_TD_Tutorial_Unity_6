@@ -1,28 +1,38 @@
 # Object Pooling
 
-## Purpose
-Object Pooling is very valuable optimisation technique in games that nowadays is incredibly easy to implement in Unity
-thanks to the engines own Object Pool class.
+## Overview
+Reuse objects instead of creating and destroying them. Pre-warm a pool of inactive objects, activate when needed, deactivate and return when done.
 
-Instead of Instantiating and Destroying objects, you instead enable and disable objects, 
-reusing them when possible and only instantiating when neccesary.
+## Why Use It
+- Eliminate GC spikes from frequent Instantiate/Destroy
+- Consistent frame times during heavy spawning
+- Unity's ObjectPool<T> provides this out of the box
 
-Pooled objects must be properly reset when reused to avoid carrying over state from previous uses.
+## When Not to Use
+- Objects that are rarely spawned (UI panels, one-time effects)
+- When pool size is unpredictable and unbounded
+- When object initialization is more expensive than just instantiation
 
-Instantiation and Destroy calls can use up a lot of processing power when calling frequently on objects such as projectiles or particle effects,
-so if you have not used it before, you will often notice a significant performance improvement.
+## In This Project
+- `ObjectPoolManager` — manages multiple pools by key string
+- `PoolConfig` — inspector configuration per pool (prefab, defaultSize, maxSize)
+- `IPoolable` — Reset() method called when object returns to pool
+- Pre-warming on Awake for consistent first-frame performance
 
-Not every object needs pooling, but objects that are created and destroyed frequently are ideal candidates.
+## Code Example
+```csharp
+// Fetch from pool
+var enemy = Services.Get<ObjectPoolManager>().Get("enemy", position, rotation);
+enemy.GetComponent<EnemyController>().Initialize(data, path);
 
----
+// Return to pool
+public void Die()
+{
+    Services.Get<CombatEvents>().EnemyDeath.Raise(GoldGiven);
+    Services.Get<ObjectPoolManager>().Return("enemy", gameObject);
+}
+```
 
-## Implementation
+Key gotcha: IPoolable.Reset() must clear ALL per-instance state. If Reset() doesn't clear the IHealthStrategy reference, pooled enemies retain old health.
 
-In our project, we will be using Object Pooling for Enemies, Projectiles and Particle Effects.
-We will be Pre-Warming our pools at the start of the game. 
-This means creating a number of objects at the start that can then be called by the game instead of needing to instatiate objects for the first few calls.
-
-Our ObjectPoolManager will be a singleton class that can be accessed by any class in the game.
-For this will include the Wave Spawner for Enemies, Tower Controllers for Projectiles, and Enemy Controller for hit and death effects.
-
-We will create the pools using the Unity Object Pool Class and give each a return and fetch functions.
+Related: [Interfaces](Interfaces.md)

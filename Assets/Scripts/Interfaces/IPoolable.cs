@@ -2,6 +2,7 @@ namespace Interfaces
 {
     public interface IPoolable
     {
-        public void Reset();
+        // TODO: Episode 08 — Poolable contract
+        // void Reset();
     }
 }
