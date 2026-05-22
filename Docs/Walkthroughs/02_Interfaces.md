@@ -107,6 +107,7 @@ namespace Enemies.Controllers
 ```
 
 **What changed from Episode 1:**
+
 - Added `IDamageable` and `ITargetable` to the implements list
 - Added `startHealth` serialized field, `_currentHealth` private field
 - `IsAlive` property reads from `_currentHealth`
@@ -126,21 +127,11 @@ namespace Enemies.Components
 {
     public class EnemyHealthBar : MonoBehaviour
     {
-        [SerializeField] private Slider slider;
-        [SerializeField] private Vector3 offset = new Vector3(0, 2f, 0);
+        [SerializeField] private Slider healthBar;
 
-        public void SetHealth(float current, float max)
-        {
-            slider.value = Mathf.Clamp01(current / max);
-        }
-
-        public void SetPosition(Vector3 enemyPosition)
-        {
-            transform.position = enemyPosition + offset;
-        }
-
-        public void Show() => gameObject.SetActive(true);
+        public void UpdateValue(float healthPercent) => healthBar.value = healthPercent;
         public void Hide() => gameObject.SetActive(false);
+        public void Show() => gameObject.SetActive(true);
     }
 }
 ```
@@ -157,60 +148,52 @@ namespace Enemies.Controllers
 {
     public class EnemyController : MonoBehaviour, IDamageable, ITargetable
     {
-        [SerializeField] private float moveSpeed = 5f;
+        [SerializeField] private float moveSpeed = 1f;
         [SerializeField] private float startHealth = 100f;
         [SerializeField] private EnemyPath path;
         [SerializeField] private EnemyHealthBar healthBar;
-
+        
         private int _currentWaypointIndex;
         private float _currentHealth;
-
-        // ITargetable
+        
         public Vector3 Position => transform.position;
         public bool IsAlive => _currentHealth > 0;
 
         private void Start()
         {
-            _currentHealth = startHealth;
             _currentWaypointIndex = 0;
+            _currentHealth = startHealth;
             transform.position = path.StartPosition;
+            healthBar.Hide();
         }
 
         private void Update()
         {
-            if (path == null || !IsAlive) return;
+            if(!path || !IsAlive) return;
 
             if (!path.HasWaypoint(_currentWaypointIndex))
             {
                 Destroy(gameObject);
                 return;
             }
-
-            Vector3 target = path.GetWaypointPosition(_currentWaypointIndex);
-            transform.position = Vector3.MoveTowards(
-                transform.position, target, moveSpeed * Time.deltaTime);
+            
+            var target = path.GetWaypointPosition(_currentWaypointIndex);
+            transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
+            transform.LookAt(target);
 
             if (path.IsAtWaypoint(_currentWaypointIndex, transform.position))
-            {
                 _currentWaypointIndex++;
-            }
-
-            if (healthBar != null)
-            {
-                healthBar.SetHealth(_currentHealth, startHealth);
-                healthBar.SetPosition(transform.position);
-            }
         }
 
-        // IDamageable
         public void TakeDamage(float damage)
         {
             _currentHealth -= damage;
-            if (_currentHealth <= 0)
-            {
-                _currentHealth = 0;
-                Destroy(gameObject);
-            }
+            healthBar.Show();
+            healthBar.UpdateValue(Mathf.Clamp01(_currentHealth / startHealth));
+            
+            if (!(_currentHealth <= 0)) return;
+            _currentHealth = 0;
+            Destroy(gameObject);
         }
     }
 }
@@ -229,24 +212,27 @@ using UnityEngine;
 public class ClickDamageTest : MonoBehaviour
 {
     [SerializeField] private float damagePerClick = 25f;
+        private Camera _camera;
 
-    private void Update()
-    {
-        if (!Input.GetMouseButtonDown(0)) return;
-
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit))
+#if UNITY_EDITOR
+        private void Awake() => _camera = Camera.main;
+        private void Update()
         {
-            if (hit.collider.TryGetComponent<IDamageable>(out var damageable))
-            {
-                if (damageable.IsAlive)
-                {
-                    damageable.TakeDamage(damagePerClick);
-                    Debug.Log($"Dealt {damagePerClick} damage to {hit.collider.name}");
-                }
-            }
+            if (Pointer.current == null) return;
+            if (!Pointer.current.press.wasPressedThisFrame) return;
+            if (!_camera) return;
+
+            var screenPosition = Pointer.current.position.ReadValue();
+            var ray = _camera.ScreenPointToRay(screenPosition);
+            
+            if (!Physics.Raycast(ray, out var hit)) return;
+            if (!hit.collider.TryGetComponent<IDamageable>(out var damageable)) return;
+            if (!damageable.IsAlive) return;
+            
+            damageable.TakeDamage(damagePerClick);
+            Debug.Log($"Dealt {damagePerClick} damage to {hit.collider.name}");
         }
-    }
+#endif
 }
 ```
 
@@ -285,10 +271,10 @@ public class ClickDamageTest : MonoBehaviour
 
 ## Debugging
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Click does nothing | No Collider on enemy, or wrong layer | Add a Collider (Box or Capsule) to enemy GameObject |
-| `TryGetComponent<IDamageable>` returns null | EnemyController doesn't implement the interface | Verify `IDamageable` is in the implements list |
-| Health bar doesn't appear | Slider not assigned or Canvas not world-space | Check EnemyHealthBar slider reference, set Canvas to World Space |
-| Health bar faces wrong way | Canvas not set to face camera | Add a `LookAt(Camera.main.transform)` in LateUpdate, or use a Billboard setup |
-| Enemy dies on first click | `startHealth` is 0 or very low | Set `startHealth = 100` in Inspector |
+| Symptom                                     | Cause                                           | Fix                                                                           |
+| ------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------- |
+| Click does nothing                          | No Collider on enemy, or wrong layer            | Add a Collider (Box or Capsule) to enemy GameObject                           |
+| `TryGetComponent<IDamageable>` returns null | EnemyController doesn't implement the interface | Verify `IDamageable` is in the implements list                                |
+| Health bar doesn't appear                   | Slider not assigned or Canvas not world-space   | Check EnemyHealthBar slider reference, set Canvas to World Space              |
+| Health bar faces wrong way                  | Canvas not set to face camera                   | Add a `LookAt(Camera.main.transform)` in LateUpdate, or use a Billboard setup |
+| Enemy dies on first click                   | `startHealth` is 0 or very low                  | Set `startHealth = 100` in Inspector                                          |
