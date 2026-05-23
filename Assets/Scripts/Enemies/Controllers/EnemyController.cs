@@ -43,11 +43,38 @@ namespace Enemies.Controllers
         [SerializeField] private EnemyPath path;
         [SerializeField] private EnemyHealthBar healthBar;
         
+        [SerializeField] private PlayerStats playerStats;
+        [SerializeField] private int goldGiven = 10;
+        [SerializeField] private int livesTaken = 1;
+        
         private int _currentWaypointIndex;
         private float _currentHealth;
         
         public Vector3 Position => transform.position;
         public bool IsAlive => _currentHealth > 0;
+
+        private void Die()
+        {
+            playerStats.AddGold(goldGiven);
+            Destroy(gameObject);
+        }
+
+        private void HandleEndReached()
+        {
+            playerStats.RemoveLives(livesTaken);
+            Destroy(gameObject);
+        }
+
+        public void TakeDamage(float damage)
+        {
+            _currentHealth -= damage;
+            healthBar.Show();
+            healthBar.UpdateValue(Mathf.Clamp01(_currentHealth / startHealth));
+            
+            if (!(_currentHealth <= 0)) return;
+            _currentHealth = 0;
+            Die();
+        }
 
         private void Start()
         {
@@ -63,7 +90,7 @@ namespace Enemies.Controllers
 
             if (!path.HasWaypoint(_currentWaypointIndex))
             {
-                Destroy(gameObject);
+                HandleEndReached();
                 return;
             }
             
@@ -74,18 +101,5 @@ namespace Enemies.Controllers
             if (path.IsAtWaypoint(_currentWaypointIndex, transform.position))
                 _currentWaypointIndex++;
         }
-
-        public void TakeDamage(float damage)
-        {
-            _currentHealth -= damage;
-            healthBar.Show();
-            healthBar.UpdateValue(Mathf.Clamp01(_currentHealth / startHealth));
-            
-            if (!(_currentHealth <= 0)) return;
-            _currentHealth = 0;
-            Destroy(gameObject);
-        }
-
-        
     }
 }

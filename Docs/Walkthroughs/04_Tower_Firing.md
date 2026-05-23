@@ -56,6 +56,7 @@ namespace Projectiles
 ```
 
 **How it works:**
+
 - `Launch(ITargetable)` stores the target. The projectile homes toward the target each frame.
 - If target is null or dead, projectile self-destructs — no point chasing nothing.
 - `direction * moveSpeed * Time.deltaTime` — constant-speed homing movement.
@@ -75,39 +76,41 @@ using UnityEngine;
 
 namespace Towers
 {
+   [RequireComponent(typeof(TowerDetection))]
     public class TowerFiring : MonoBehaviour
     {
-        [SerializeField] private TowerDetection detection;
         [SerializeField] private GameObject projectilePrefab;
+        [SerializeField] private Transform launcher;
         [SerializeField] private Transform firePoint;
         [SerializeField] private float fireRate = 1f;
-
+        
+        private TowerDetection _detection;
         private float _fireCooldown;
 
+        private void Fire()
+        {
+            var projectileObj = Instantiate(projectilePrefab, firePoint.position, firePoint.rotation);
+            var projectile = projectileObj.GetComponent<ProjectileBase>();
+            launcher.LookAt(_detection.CurrentTarget.Position);
+            projectile.Launch(_detection.CurrentTarget);
+            _fireCooldown = fireRate;
+        }
+        
+        private void Awake() => _detection = GetComponent<TowerDetection>();
+        
         private void Update()
         {
             _fireCooldown -= Time.deltaTime;
 
-            if (detection.HasTarget && _fireCooldown <= 0f)
-            {
-                Fire();
-                _fireCooldown = 1f / fireRate;
-            }
-        }
-
-        private void Fire()
-        {
-            GameObject projectileObj = Instantiate(
-                projectilePrefab, firePoint.position, firePoint.rotation);
-
-            ProjectileBase projectile = projectileObj.GetComponent<ProjectileBase>();
-            projectile.Launch(detection.CurrentTarget);
+            if (!_detection.HasTarget || !(_fireCooldown <= 0f)) return;
+            Fire();
         }
     }
 }
 ```
 
 **How it works:**
+
 - References `TowerDetection` (from Episode 03) — asks "do you have a target?"
 - `_fireCooldown` counts down. When 0 and a target exists, fires.
 - `1f / fireRate` converts "shots per second" to "seconds between shots" (fireRate=1 → 1 second cooldown).
@@ -137,19 +140,22 @@ namespace Towers
 1. Press Play
 2. Enemy walks along path
 3. When enemy enters tower range:
+   
    - Tower fires a projectile (one per second)
+   
    - Projectile flies toward enemy
+   
    - On hit: enemy takes 10 damage, health bar decreases
 4. After 10 hits (10 × 10 = 100 HP): enemy dies, is destroyed
 
 ## Debugging
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Tower never fires | `detection` field not assigned | Drag TowerDetection into Inspector |
-| Projectile spawns at wrong spot | `firePoint` not set | Create FirePoint child and assign |
-| Projectile flies sideways | FirePoint rotation is wrong | Orient FirePoint to face the path |
-| Projectile misses | 0.2f hit distance too small for projectile speed | Increase hit distance or reduce projectile speed |
-| Multiple projectiles per frame | `fireRate = 0` causes division by zero | Set fireRate to at least 0.1 |
-| Projectile flies through enemy | Speed too high for frame rate | At 60fps and 15 units/sec, projectile moves 0.25 units per frame. Hit distance of 0.2f is fine at this speed. If you increase speed, increase hit distance. |
-| Enemy doesn't take damage | Enemy Collider is a trigger | Projectile uses distance check, not collision. But if you want collision-based, replace the distance check with `OnTriggerEnter`. |
+| Symptom                         | Cause                                            | Fix                                                                                                                                                         |
+| ------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tower never fires               | `detection` field not assigned                   | Drag TowerDetection into Inspector                                                                                                                          |
+| Projectile spawns at wrong spot | `firePoint` not set                              | Create FirePoint child and assign                                                                                                                           |
+| Projectile flies sideways       | FirePoint rotation is wrong                      | Orient FirePoint to face the path                                                                                                                           |
+| Projectile misses               | 0.2f hit distance too small for projectile speed | Increase hit distance or reduce projectile speed                                                                                                            |
+| Multiple projectiles per frame  | `fireRate = 0` causes division by zero           | Set fireRate to at least 0.1                                                                                                                                |
+| Projectile flies through enemy  | Speed too high for frame rate                    | At 60fps and 15 units/sec, projectile moves 0.25 units per frame. Hit distance of 0.2f is fine at this speed. If you increase speed, increase hit distance. |
+| Enemy doesn't take damage       | Enemy Collider is a trigger                      | Projectile uses distance check, not collision. But if you want collision-based, replace the distance check with `OnTriggerEnter`.                           |
