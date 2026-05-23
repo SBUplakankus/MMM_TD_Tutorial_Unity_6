@@ -14,50 +14,39 @@ namespace Towers
 {
     public class TowerDetection : MonoBehaviour
     {
-        [SerializeField] private float detectionRadius = 5f;
+        [SerializeField] private float detectionRange = 5f;
         [SerializeField] private LayerMask enemyLayer;
-
-        public ITargetable CurrentTarget { get; private set; }
-        public bool HasTarget => CurrentTarget != null && CurrentTarget.IsAlive;
-
-        private void Update()
-        {
-            ScanForTargets();
-        }
+        
+        public ITargetable CurrentTarget {get; private set;}
+        public bool HasTarget => CurrentTarget is { IsAlive: true };
 
         private void ScanForTargets()
         {
             CurrentTarget = null;
+            
+            var hits = Physics.OverlapSphere(transform.position, detectionRange, enemyLayer);
+            var closestDistance = float.MaxValue;
 
-            Collider[] hits = Physics.OverlapSphere(
-                transform.position, detectionRadius, enemyLayer);
-
-            float closestDist = float.MaxValue;
-
-            foreach (Collider hit in hits)
+            foreach (var hit in hits)
             {
-                if (hit.TryGetComponent<ITargetable>(out var target) && target.IsAlive)
-                {
-                    float dist = Vector3.Distance(transform.position, target.Position);
-                    if (dist < closestDist)
-                    {
-                        closestDist = dist;
-                        CurrentTarget = target;
-                    }
-                }
+                if (!hit.TryGetComponent(out ITargetable target)) continue;
+                var distance = Vector3.Distance(transform.position, hit.transform.position);
+                if (!(distance < closestDistance)) continue;
+                closestDistance = distance;
+                CurrentTarget = target;
             }
         }
+        
+        private void Update() => ScanForTargets();
 
         private void OnDrawGizmosSelected()
         {
             Gizmos.color = Color.cyan;
-            Gizmos.DrawWireSphere(transform.position, detectionRadius);
+            Gizmos.DrawWireSphere(transform.position, detectionRange);
 
-            if (CurrentTarget != null && CurrentTarget.IsAlive)
-            {
-                Gizmos.color = Color.red;
-                Gizmos.DrawLine(transform.position, CurrentTarget.Position);
-            }
+            if (!HasTarget) return;
+            Gizmos.color = Color.green;
+            Gizmos.DrawLine(transform.position, CurrentTarget.Position);
         }
     }
 }
