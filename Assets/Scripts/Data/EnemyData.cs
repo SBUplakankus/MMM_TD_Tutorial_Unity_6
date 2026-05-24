@@ -6,6 +6,10 @@ namespace Data
     public class EnemyData : ScriptableObject
     {
         // TODO: Episode 07 — Composed enemy data: HealthConfig, MovementConfig, goldGiven, damage
-        // Properties for each field
+        
+        public MovementConfig movementConfig;
+        public float startHealth = 100f;
+        public int goldGiven = 10;
+        public int livesTaken = 1;
     }
 }
