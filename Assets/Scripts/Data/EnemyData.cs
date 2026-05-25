@@ -8,7 +8,7 @@ namespace Data
         // TODO: Episode 07 — Composed enemy data: HealthConfig, MovementConfig, goldGiven, damage
         
         public MovementConfig movementConfig;
-        public float startHealth = 100f;
+        public HealthConfig healthConfig;
         public int goldGiven = 10;
         public int livesTaken = 1;
     }

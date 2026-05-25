@@ -1,5 +1,6 @@
 using Data;
 using Enemies.Components;
+using Factories;
 using Interfaces;
 using Systems.Game;
 using Systems.Parsing;
@@ -45,12 +46,11 @@ namespace Enemies.Controllers
         public EnemyPath Path { get; private set; }
         public int CurrentWaypointIndex { get; set; }
         public Vector3 Position => transform.position;
-        public bool IsAlive => _currentHealth > 0;
+        public bool IsAlive => _health != null && _health.IsAlive;
 
+        private IHealthStrategy _health;
         private IMovementStrategy _movement;
         private PlayerStats _playerStats;
-        private float _currentHealth;
-        private float _startHealth;
         private int _goldGiven;
         private int _livesTaken;
 
@@ -58,10 +58,11 @@ namespace Enemies.Controllers
         {
             Path = path;
             _playerStats = playerStats;
-            _startHealth = data.startHealth;
-            _currentHealth = _startHealth;
             _goldGiven = data.goldGiven;
             _livesTaken = data.livesTaken;
+
+            _health = StrategyFactory.CreateHealth(data.healthConfig);
+            _health.Init();
 
             _movement = StrategyFactory.CreateMovement(data.movementConfig);
             _movement.Init(this);
@@ -73,22 +74,24 @@ namespace Enemies.Controllers
         {
             if (!IsAlive) return;
 
+            _health.Tick(Time.deltaTime);
+
             if (_movement.Tick(this))
             {
                 HandleEndReached();
                 return;
             }
+
+            healthBar.UpdateValue(Mathf.Clamp01(_health.CurrentHealth / _health.MaxHealth));
         }
 
         public void TakeDamage(float damage)
         {
-            _currentHealth -= damage;
+            var result = _health.TakeDamage(damage);
             healthBar.Show();
-            healthBar.UpdateValue(Mathf.Clamp01(_currentHealth / _startHealth));
 
-            if (_currentHealth > 0) return;
-            _currentHealth = 0;
-            Die();
+            if (result.Died)
+                Die();
         }
 
         private void Die()

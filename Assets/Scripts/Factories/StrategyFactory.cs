@@ -4,7 +4,7 @@ using Interfaces;
 using Strategies.Health;
 using Strategies.Movement;
 
-namespace Systems.Parsing
+namespace Factories
 {
     public static class StrategyFactory
     {
@@ -21,6 +21,17 @@ namespace Systems.Parsing
         }
         
         // TODO: Episode 07 — static IHealthStrategy CreateHealth(HealthConfig config)
+        
+        public static IHealthStrategy CreateHealth(HealthConfig config)
+        {
+            return config.type switch
+            {
+                HealthType.Normal   => new NormalHealth(config.startHealth),
+                HealthType.Armoured => new ArmouredHealth(config.startHealth, config.armourStrength),
+                _                  => new NormalHealth(config.startHealth)
+            };
+        }
+        
         // TODO: Episode 12 — Add Shield + Regen cases to CreateHealth
     }
 }

@@ -2,52 +2,96 @@
 
 ## What You're Building
 
-Extract health logic from `EnemyController` into `IHealthStrategy` implementations. `NormalHealth` does simple subtraction. `ArmouredHealth` reduces incoming damage. A `DamageResult` struct tells the caller what happened. Four composed enemy types work. `EnemyController` becomes a thin orchestrator that delegates to both movement and health strategies.
+Extract health logic from `EnemyController` into `IHealthStrategy` implementations. `NormalHealth` does simple subtraction. `ArmouredHealth` absorbs damage into a separate armour pool first — overflow bleeds through to health. A `DamageResult` struct tells the caller what happened. `EnemyController` becomes a thin orchestrator that delegates to both movement and health strategies.
 
 ## The Problem
 
-You want an armoured enemy that takes 30% less damage. Right now:
+You want an armoured enemy. Right now health is hardcoded inline in `EnemyController.TakeDamage`:
 
 ```csharp
 public void TakeDamage(float damage)
 {
     _currentHealth -= damage;
-    if (_currentHealth <= 0) Die();
+    healthBar.Show();
+    healthBar.UpdateValue(Mathf.Clamp01(_currentHealth / _startHealth));
+
+    if (_currentHealth > 0) return;
+    _currentHealth = 0;
+    Die();
 }
 ```
 
-To add armour, you'd add `if (isArmoured) damage *= 0.7f;` inside `TakeDamage`. Then shields. Then regen. `TakeDamage` grows with every health type. And the caller can't tell if the enemy died — `void TakeDamage` returns nothing.
+To add armour you'd add branches inside `TakeDamage`. Then shields. Then regen. The method grows with every health type and the caller can never tell how much damage was actually dealt. The Strategy Pattern moves each health behaviour into its own class — `EnemyController.TakeDamage` becomes two lines.
 
-## IHealthStrategy.cs + DamageResult.cs
+## DamageResult + IHealthStrategy.cs
 
 ```csharp
-using System;
+namespace Structs
+{
+    public readonly struct DamageResult
+    {
+        public bool Died { get; }
+        public float DamageDealt { get; }
+
+        private DamageResult(bool died, float damageDealt)
+        {
+            Died = died;
+            DamageDealt = damageDealt;
+        }
+
+        public static DamageResult Alive(float damageDealt) => new(false, damageDealt);
+        public static DamageResult Dead(float damageDealt) => new(true, damageDealt);
+    }
+}
 
 namespace Interfaces
 {
     public interface IHealthStrategy
     {
-        void Initialize();
+        void Init();
         DamageResult TakeDamage(float amount);
         void Tick(float deltaTime);
         bool IsAlive { get; }
         float CurrentHealth { get; }
         float MaxHealth { get; }
     }
+}
+```
 
-    public readonly record struct DamageResult(bool Died, float DamageDealt)
+**Why `DamageResult` instead of `bool`?** The caller needs to know two things: did the enemy die, and how much damage was actually dealt. With `ArmouredHealth` the dealt amount can differ from the incoming amount when armour absorbs some of it. A bool only answers the first question. `DamageResult` answers both in one zero-allocation stack value.
+
+**Why `Tick` on the interface?** `NormalHealth` ignores it. Future health strategies — regen, shield recharge — need a per-frame update. Putting it on the interface now means the interface never needs to change when those types are added.
+
+**Why `readonly record struct`?** Immutable, stack-allocated, and the positional syntax replaces explicit field declarations and constructor boilerplate. Factory methods (`Alive()`, `Dead()`) keep call sites readable.
+
+## HealthConfig.cs
+
+```csharp
+namespace Enums
+{
+    public enum HealthType
     {
-        public static DamageResult Alive(float damageDealt) => new(false, damageDealt);
-        public static DamageResult Dead(float damageDealt) => new(true, damageDealt);
+        Normal,
+        Armoured
+    }
+}
+
+using Enums;
+using UnityEngine;
+
+namespace Data
+{
+    [CreateAssetMenu(fileName = "HealthConfig", menuName = "TD/Health Config")]
+    public class HealthConfig : ScriptableObject
+    {
+        public HealthType type;
+        public int startHealth = 100;
+        [Range(0,0.99f)] public float armourStrength;
     }
 }
 ```
 
-**Why DamageResult instead of bool?** A `bool` only says "died or not." But callers also need to know *how much damage was actually dealt* — for damage numbers, for gold-on-kill tracking, for armour calculations. The struct carries both in one zero-alloc stack value.
-
-**Why readonly record struct?** Record structs are immutable and stack-allocated like readonly structs, plus auto-generated value-based `Equals`, `GetHashCode`, and `ToString`. The positional syntax `(bool Died, float DamageDealt)` replaces explicit field declarations and constructor. Factory methods (`Alive()`, `Dead()`) make call sites readable: `return DamageResult.Dead(17.5f)`. Use `readonly record struct` for simple data carriers where value equality and debug string output are useful.
-
-**Why Tick on the interface?** `NormalHealth` ignores it. But `RegenHealth` (Episode 12) needs a per-frame tick to restore health. Putting it on the interface now means we don't have to change the interface later.
+`armourPoints` is ignored by `NormalHealth` — unused fields on a ScriptableObject cost nothing.
 
 ## NormalHealth.cs
 
@@ -61,27 +105,19 @@ namespace Strategies.Health
         private readonly int _startHealth;
         private float _currentHealth;
 
-        public NormalHealth(int startHealth)
-        {
-            _startHealth = startHealth;
-        }
+        public NormalHealth(int startHealth) => _startHealth = startHealth;
 
-        public void Initialize()
-        {
-            _currentHealth = _startHealth;
-        }
+        public void Init() => _currentHealth = _startHealth;
 
         public DamageResult TakeDamage(float amount)
         {
             _currentHealth -= amount;
 
-            if (_currentHealth <= 0f)
-            {
-                _currentHealth = 0f;
-                return DamageResult.Dead(amount);
-            }
+            if (!(_currentHealth <= 0f)) return DamageResult.Alive(amount);
 
-            return DamageResult.Alive(amount);
+            _currentHealth = 0f;
+            return DamageResult.Dead(amount);
+
         }
 
         public void Tick(float deltaTime) { }
@@ -93,44 +129,46 @@ namespace Strategies.Health
 }
 ```
 
-Same logic as what was inline in `EnemyController.TakeDamage`. Extracted unchanged.
+Same logic that was inline in `EnemyController.TakeDamage` — extracted unchanged.
 
 ## ArmouredHealth.cs
 
+Armour absorbs damage first. Any overflow goes to health. Once the armour pool hits zero it stays there.
+
 ```csharp
 using Interfaces;
+using Structs;
+using UnityEngine;
 
 namespace Strategies.Health
 {
     public class ArmouredHealth : IHealthStrategy
     {
         private readonly int _startHealth;
-        private readonly float _armourPercent;
+        private readonly float _armourStrength;
         private float _currentHealth;
 
-        public ArmouredHealth(int startHealth, float armourPercent)
+        public ArmouredHealth(int startHealth, float armourStrength)
         {
             _startHealth = startHealth;
-            _armourPercent = armourPercent;
+            _armourStrength = armourStrength;
         }
 
-        public void Initialize()
+        public void Init()
         {
             _currentHealth = _startHealth;
         }
 
         public DamageResult TakeDamage(float amount)
         {
-            float reducedDamage = amount * (1f - _armourPercent);
-            _currentHealth -= reducedDamage;
+            var damage = amount - (amount * _armourStrength);
+            _currentHealth -= damage;
 
-            if (_currentHealth <= 0f)
-            {
-                _currentHealth = 0f;
-                return DamageResult.Dead(reducedDamage);
-            }
+            if (_currentHealth > 0f) return DamageResult.Alive(damage);
+            
+            _currentHealth = 0f;
+            return DamageResult.Dead(damage);
 
-            return DamageResult.Alive(reducedDamage);
         }
 
         public void Tick(float deltaTime) { }
@@ -142,43 +180,45 @@ namespace Strategies.Health
 }
 ```
 
-**Damage trace** (armourPercent = 0.3, incoming = 10):
-1. `reducedDamage = 10 * 0.7 = 7`
-2. `_currentHealth -= 7`
-3. `DamageResult.Alive(7)` — caller knows 7 was dealt, not 10
+**Damage trace** (armour = 10, health = 100, incoming = 15):
 
-A 100 HP armoured enemy (30% armour) takes ~14 hits of 10 to kill vs 10 hits for normal.
+```
+armourDamage = min(15, 10) = 10  → armour hits 0
+healthDamage = 15 - 10     = 5   → health becomes 95
+```
 
-## HealthType enum + HealthConfig.cs
+**Damage trace** (armour = 0, health = 95, incoming = 15):
+
+```
+armourDamage = min(15, 0) = 0    → armour stays 0
+healthDamage = 15 - 0     = 15   → health becomes 80
+```
+
+Once armour is depleted, subsequent hits go entirely to health.
+
+## EnemyData.cs (updated)
+
+`startHealth` float is replaced by a `HealthConfig` reference. Enemy data is now fully composed from config assets.
 
 ```csharp
 using UnityEngine;
 
 namespace Data
 {
-    public enum HealthType
+    [CreateAssetMenu(fileName = "EnemyData", menuName = "TD/Enemy Data")]
+    public class EnemyData : ScriptableObject
     {
-        Normal,
-        Armoured
-    }
-
-    [CreateAssetMenu(fileName = "HealthConfig", menuName = "TD/Health Config")]
-    public class HealthConfig : ScriptableObject
-    {
-        [SerializeField] private HealthType type;
-        [SerializeField] private int startHealth = 100;
-        [SerializeField, Range(0f, 0.99f)] private float armourPercent;
-
-        public HealthType Type => type;
-        public int StartHealth => startHealth;
-        public float ArmourPercent => armourPercent;
+        public MovementConfig movementConfig;
+        public HealthConfig healthConfig;
+        public int goldGiven = 10;
+        public int livesTaken = 1;
     }
 }
 ```
 
-`Shield` and `Regen` types added in Episode 12. The `armourPercent` field is ignored for Normal configs — unused fields on a ScriptableObject cost nothing.
-
 ## StrategyFactory.cs (updated)
+
+Both strategies exist now. Add `CreateHealth` alongside the existing `CreateMovement`.
 
 ```csharp
 using Data;
@@ -190,60 +230,45 @@ namespace Systems.Parsing
 {
     public static class StrategyFactory
     {
-        public static IHealthStrategy CreateHealth(HealthConfig config)
-        {
-            return config.Type switch
-            {
-                HealthType.Normal => new NormalHealth(config.StartHealth),
-                HealthType.Armoured => new ArmouredHealth(config.StartHealth, config.ArmourPercent),
-                _ => new NormalHealth(config.StartHealth)
-            };
-        }
-
         public static IMovementStrategy CreateMovement(MovementConfig config)
         {
             return config.Type switch
             {
                 MovementType.Grounded => new GroundedPath(config.MoveSpeed),
-                MovementType.Flying => new FlyingPath(config.MoveSpeed, config.FlyingHeight),
-                _ => new GroundedPath(config.MoveSpeed)
+                MovementType.Flying   => new FlyingPath(config.MoveSpeed, config.FlyingHeight),
+                _                    => new GroundedPath(config.MoveSpeed)
+            };
+        }
+
+        public static IHealthStrategy CreateHealth(HealthConfig config)
+        {
+            return config.Type switch
+            {
+                HealthType.Normal   => new NormalHealth(config.StartHealth),
+                HealthType.Armoured => new ArmouredHealth(config.StartHealth, config.ArmourPoints),
+                _                  => new NormalHealth(config.StartHealth)
             };
         }
     }
 }
 ```
 
-Added `CreateHealth`. The movement method is unchanged from Episode 06.
-
-## EnemyData.cs (updated)
-
-```csharp
-using UnityEngine;
-
-namespace Data
-{
-    [CreateAssetMenu(fileName = "EnemyData", menuName = "TD/Enemy Data")]
-    public class EnemyData : ScriptableObject
-    {
-        [SerializeField] private HealthConfig healthConfig;
-        [SerializeField] private MovementConfig movementConfig;
-        [SerializeField] private int goldGiven = 10;
-        [SerializeField] private int damage = 1;
-
-        public HealthConfig HealthConfig => healthConfig;
-        public MovementConfig MovementConfig => movementConfig;
-        public int GoldGiven => goldGiven;
-        public int Damage => damage;
-    }
-}
-```
-
-`startHealth` float replaced by `HealthConfig` reference. Enemy data is now fully composed from config ScriptableObjects.
-
 ## EnemyController.cs (thin orchestrator)
+
+`EnemyData` and `StrategyFactory` both exist now. The controller can wire health up the same way it wired movement in Episode 06.
+
+**What changes from Episode 06:**
+
+| Removed                            | Added                                                           |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `float _currentHealth`             | `IHealthStrategy _health`                                       |
+| `float _startHealth`               | `_health.IsAlive`, `_health.CurrentHealth`, `_health.MaxHealth` |
+| Inline subtraction in `TakeDamage` | `_health.TakeDamage(damage)` returns `DamageResult`             |
+| `if (_currentHealth <= 0)`         | `if (result.Died)`                                              |
 
 ```csharp
 using Data;
+using Enemies.Components;
 using Interfaces;
 using Systems.Game;
 using Systems.Parsing;
@@ -256,108 +281,103 @@ namespace Enemies.Controllers
         [SerializeField] private EnemyHealthBar healthBar;
 
         public EnemyPath Path { get; private set; }
-        public int CurrentWayPointIndex { get; set; }
-        public IHealthStrategy Health { get; private set; }
-        public IMovementStrategy Movement { get; private set; }
-        private int _goldGiven;
-        private int _damage;
-
-        // ITargetable
+        public int CurrentWaypointIndex { get; set; }
         public Vector3 Position => transform.position;
-        public bool IsAlive => Health != null && Health.IsAlive;
+        public bool IsAlive => _health != null && _health.IsAlive;
 
-        public void Initialize(EnemyData data, EnemyPath path)
+        private IHealthStrategy _health;
+        private IMovementStrategy _movement;
+        private PlayerStats _playerStats;
+        private int _goldGiven;
+        private int _livesTaken;
+
+        public void Initialize(EnemyData data, EnemyPath path, PlayerStats playerStats)
         {
             Path = path;
-            Health = StrategyFactory.CreateHealth(data.HealthConfig);
-            Movement = StrategyFactory.CreateMovement(data.MovementConfig);
+            _playerStats = playerStats;
             _goldGiven = data.GoldGiven;
-            _damage = data.Damage;
+            _livesTaken = data.LivesTaken;
 
-            Health.Initialize();
-            Movement.Initialize(this);
-            Movement.OnMovementCompleted += OnReachedEnd;
+            _health = StrategyFactory.CreateHealth(data.HealthConfig);
+            _health.Init();
+
+            _movement = StrategyFactory.CreateMovement(data.MovementConfig);
+            _movement.Init(this);
+
+            healthBar.Hide();
         }
 
         private void Update()
         {
             if (!IsAlive) return;
 
-            Health.Tick(Time.deltaTime);
-            Movement.Tick(this);
+            _health.Tick(Time.deltaTime);
 
-            if (healthBar != null)
-                healthBar.SetHealth(Health.CurrentHealth, Health.MaxHealth);
-            if (healthBar != null)
-                healthBar.SetPosition(transform.position);
+            if (_movement.Tick(this))
+            {
+                HandleEndReached();
+                return;
+            }
+
+            healthBar.UpdateValue(Mathf.Clamp01(_health.CurrentHealth / _health.MaxHealth));
         }
 
         public void TakeDamage(float damage)
         {
-            DamageResult result = Health.TakeDamage(damage);
+            var result = _health.TakeDamage(damage);
+            healthBar.Show();
+
             if (result.Died)
                 Die();
         }
 
         private void Die()
         {
-            PlayerStats.Instance.AddGold(_goldGiven);
+            _playerStats.AddGold(_goldGiven);
             Destroy(gameObject);
         }
 
-        private void OnReachedEnd()
+        private void HandleEndReached()
         {
-            Movement.OnMovementCompleted -= OnReachedEnd;
-            PlayerStats.Instance.SubtractLives(_damage);
+            _playerStats.RemoveLives(_livesTaken);
             Destroy(gameObject);
         }
     }
 }
 ```
 
-**What changed from Episode 06:**
-
-| Before | After |
-|--------|-------|
-| `float _currentHealth` | `IHealthStrategy Health` property |
-| `float _startHealth` | Gone — inside Health strategy |
-| `IsAlive => _currentHealth > 0` | `IsAlive => Health.IsAlive` |
-| `_currentHealth -= damage` inline | `Health.TakeDamage(damage)` returns DamageResult |
-| `if (_currentHealth <= 0) Die()` | `if (result.Died) Die()` |
-| No Health.Tick | `Health.Tick(Time.deltaTime)` in Update |
-
-**EnemyController now delegates to both `Health` and `Movement`.** It contains zero type-specific logic. Adding a new health type (Shield, Regen) requires zero changes to this file.
+`TakeDamage` is now three lines. `Update` contains no health or movement logic — only delegation and reactions. Adding `RegenHealth` or `ShieldHealth` in a future episode requires zero changes here.
 
 ## Unity Editor Setup
 
-### 1. Create HealthConfig SOs
+### 1. Create HealthConfig assets
 
 1. Right-click → Create > TD > Health Config
-2. Name `HC_Normal`: Type=Normal, Start Health=100, Armour=0
-3. Name `HC_Armoured`: Type=Armoured, Start Health=150, Armour=0.3
+2. `HC_Normal`: Type = Normal, Start Health = 100, Armour Points = 0
+3. `HC_Armoured`: Type = Armoured, Start Health = 100, Armour Points = 50
 
-### 2. Update EnemyData SOs
+### 2. Update EnemyData assets
 
-| Name | Health Config | Movement Config | Gold | Damage |
-|------|--------------|----------------|------|--------|
-| `ED_Basic` | HC_Normal | MC_Grounded | 10 | 1 |
-| `ED_Armoured` | HC_Armoured | MC_Grounded | 20 | 1 |
-| `ED_Flying` | HC_Normal | MC_Flying | 15 | 1 |
-| `ED_FlyingArmoured` | HC_Armoured | MC_Flying | 25 | 2 |
+| Asset               | Health Config | Movement Config | Gold | Lives Taken |
+| ------------------- | ------------- | --------------- | ---- | ----------- |
+| `ED_Basic`          | HC_Normal     | MC_Grounded     | 10   | 1           |
+| `ED_Armoured`       | HC_Armoured   | MC_Grounded     | 20   | 1           |
+| `ED_Flying`         | HC_Normal     | MC_Flying       | 15   | 1           |
+| `ED_FlyingArmoured` | HC_Armoured   | MC_Flying       | 25   | 2           |
 
 ### 3. Test all four types
 
-1. Basic: 10 hits of 10 damage to kill (100 HP / 10 per hit)
-2. Armoured: ~14 hits of 10 damage (100 effective HP after 30% reduction... 150 / 7 ≈ 21... wait, 150 HP with 30% armour: each hit of 10 becomes 7, so 150/7 ≈ 22 hits)
-3. Flying: same as Basic HP but hovers above ground
-4. FlyingArmoured: same as Armoured HP but hovers
+1. **Basic** — 10 hits of 10 damage to kill (100 HP)
+2. **Armoured** — first 5 hits absorbed by armour, next 10 hits kill (50 armour + 100 HP)
+3. **Flying** — same as Basic but hovers
+4. **FlyingArmoured** — same as Armoured but hovers
 
 ## Debugging
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Armoured takes full damage | ArmourPercent is 0 in config | Set ArmourPercent=0.3 in HC_Armoured |
-| Armoured takes zero damage | ArmourPercent is 1.0 | Keep in range [0, 0.99] |
-| Health bar shows wrong values | Not reading from strategy | Use `Health.CurrentHealth / Health.MaxHealth` |
-| NullRef on Health | HealthConfig not assigned on EnemyData | Assign HC_Normal or HC_Armoured |
-| All enemies same health | Same HealthConfig for all | Create separate config SOs per type |
+| Symptom                                | Cause                              | Fix                                                |
+| -------------------------------------- | ---------------------------------- | -------------------------------------------------- |
+| NullRef on `_health.TakeDamage`        | `Initialize` not called            | Spawner must call `Initialize` after `Instantiate` |
+| Armoured takes full damage immediately | `ArmourPoints` is 0                | Set Armour Points on HC_Armoured                   |
+| Health bar not updating                | `healthBar.UpdateValue` not called | Confirm Update runs and `_health` is not null      |
+| All enemies same health                | Same HealthConfig assigned         | Create separate config assets per type             |
+| Enemy never dies                       | `DamageResult.Died` never true     | Confirm `_currentHealth <= 0` check in strategy    |
