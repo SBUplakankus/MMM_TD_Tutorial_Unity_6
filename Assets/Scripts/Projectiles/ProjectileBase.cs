@@ -1,9 +1,11 @@
+using Enums;
 using Interfaces;
+using Systems.Managers;
 using UnityEngine;
 
 namespace Projectiles
 {
-    public class ProjectileBase : MonoBehaviour
+    public class ProjectileBase : MonoBehaviour, IUpdateable
     {
         // TODO: Episode 04 — Homing projectile toward ITargetable
         // Launch stores target, Update moves toward it, OnHit deals damage via IDamageable
@@ -14,12 +16,14 @@ namespace Projectiles
         [SerializeField] protected float maxLifetime = 5f;
         
         protected ITargetable Target;
+        private float _lifetimeTimer; 
 
         public virtual void Launch(ITargetable target)
         {
             Target = target;
             transform.LookAt(target.Position);
-            Destroy(gameObject, maxLifetime);
+            
+            _lifetimeTimer = 0f; 
         }
 
         protected virtual void OnHit(ITargetable target)
@@ -27,18 +31,19 @@ namespace Projectiles
             if(target is IDamageable damageable)
                 damageable.TakeDamage(damage);
             
-            Destroy(gameObject);
+            ObjectPoolManager.Instance.ReturnProjectile(this);
         }
-
-        private void Update()
-        {
-            if (Target is not { IsAlive: true })
+        
+        public void Tick(float deltaTime)
+        { 
+            _lifetimeTimer += deltaTime;
+            if (_lifetimeTimer >= maxLifetime || Target is not { IsAlive: true })
             {
-                Destroy(gameObject);
+                ObjectPoolManager.Instance.ReturnProjectile(this);
                 return;
             }
-            
-            var step = speed * Time.deltaTime;
+
+            var step = speed * deltaTime;
             var dist = Vector3.Distance(transform.position, Target.Position);
 
             if (dist <= step)
@@ -50,6 +55,9 @@ namespace Projectiles
             var dir = (Target.Position - transform.position).normalized;
             transform.Translate(dir * step, Space.World);
         }
+        
+        private void OnEnable() => GameUpdateManager.Instance.Register(this, UpdatePriority.High);
+        private void OnDisable() => GameUpdateManager.Instance.Unregister(this);
         
         // TODO: Episode 08 — Replace Destroy with object pool Return, add IPoolable
         // TODO: Episode 09 — Replace Instance with Services.Get

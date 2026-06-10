@@ -1,14 +1,16 @@
 using Data;
 using Enemies.Components;
+using Enums;
 using Factories;
 using Interfaces;
 using Systems.Game;
+using Systems.Managers;
 using Systems.Parsing;
 using UnityEngine;
 
 namespace Enemies.Controllers
 {
-    public class EnemyController : MonoBehaviour, IDamageable, ITargetable
+    public class EnemyController : MonoBehaviour, IDamageable, ITargetable, IUpdateable
     {
         // Episode 01: Basic movement along EnemyPath waypoints
         //   [SerializeField] float moveSpeed, EnemyPath path
@@ -70,25 +72,12 @@ namespace Enemies.Controllers
             healthBar.Hide();
         }
 
-        private void Update()
-        {
-            if (!IsAlive) return;
-
-            _health.Tick(Time.deltaTime);
-
-            if (_movement.Tick(this))
-            {
-                HandleEndReached();
-                return;
-            }
-
-            healthBar.UpdateValue(Mathf.Clamp01(_health.CurrentHealth / _health.MaxHealth));
-        }
-
         public void TakeDamage(float damage)
         {
             var result = _health.TakeDamage(damage);
             healthBar.Show();
+
+            healthBar.UpdateValue(Mathf.Clamp01(_health.CurrentHealth / _health.MaxHealth));
 
             if (result.Died)
                 Die();
@@ -97,13 +86,26 @@ namespace Enemies.Controllers
         private void Die()
         {
             _playerStats.AddGold(_goldGiven);
-            Destroy(gameObject);
+            ObjectPoolManager.Instance.ReturnEnemy(this);
         }
 
         private void HandleEndReached()
         {
             _playerStats.RemoveLives(_livesTaken);
-            Destroy(gameObject);
+            ObjectPoolManager.Instance.ReturnEnemy(this);
         }
+        
+        public void Tick(float deltaTime)
+        { 
+            if (!IsAlive) return;
+
+            _health.Tick(Time.deltaTime);
+
+            if (!_movement.Tick(this)) return;
+            HandleEndReached();
+        }
+        
+        private void OnEnable() => GameUpdateManager.Instance.Register(this, UpdatePriority.High);
+        private void OnDisable() => GameUpdateManager.Instance.Unregister(this);
     }
 }

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fdd806276788fce41ad2f351f1e722cd, type: 3}
   m_Name: Koala
   m_EditorClassIdentifier: Assembly-CSharp::Data.EnemyData
-  movementConfig: {fileID: 11400000, guid: 53df41eab20856347aca789afd34d146, type: 2}
-  healthConfig: {fileID: 11400000, guid: b1f808cc1614d99409eb69e32ac4153a, type: 2}
+  movementConfig: {fileID: 11400000, guid: 1af6478a0eeefab448d5b6dc853e719b, type: 2}
+  healthConfig: {fileID: 11400000, guid: 61d8bf8bbfc4e6844995d6d4b3ca279e, type: 2}
   goldGiven: 10
   livesTaken: 1

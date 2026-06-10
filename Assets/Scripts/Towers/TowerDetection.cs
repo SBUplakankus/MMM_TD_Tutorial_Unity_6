@@ -1,10 +1,12 @@
+using Enums;
 using Interfaces;
 using NUnit.Framework;
+using Systems.Managers;
 using UnityEngine;
 
 namespace Towers
 {
-    public class TowerDetection : MonoBehaviour
+    public class TowerDetection : MonoBehaviour, IUpdateable
     {
         // TODO: Episode 03 — Detect enemies in radius, select nearest via ITargetable
         // OverlapSphere, find closest alive ITargetable, cache as CurrentTarget
@@ -32,8 +34,6 @@ namespace Towers
                 CurrentTarget = target;
             }
         }
-        
-        private void Update() => ScanForTargets();
 
         private void OnDrawGizmosSelected()
         {
@@ -44,6 +44,10 @@ namespace Towers
             Gizmos.color = Color.green;
             Gizmos.DrawLine(transform.position, CurrentTarget.Position);
         }
+        
+        public void Tick(float deltaTime) => ScanForTargets();
+        private void OnEnable() => GameUpdateManager.Instance.Register(this, UpdatePriority.Medium);
+        private void OnDisable() => GameUpdateManager.Instance.Unregister(this);
 
         // TODO: Episode 13 — Swap inline sort for ITargetingStrategy
     }

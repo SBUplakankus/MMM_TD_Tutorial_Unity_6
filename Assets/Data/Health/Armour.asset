@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: Armour
   m_EditorClassIdentifier: Assembly-CSharp::Data.HealthConfig
   type: 2
-  startHealth: 100
+  startHealth: 1000
   armourStrength: 0.511
