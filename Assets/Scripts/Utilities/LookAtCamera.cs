@@ -1,3 +1,4 @@
+using Core;
 using Enums;
 using Interfaces;
 using Systems.Managers;
@@ -11,7 +12,8 @@ namespace Utilities
 
         private void Start()
         {
-            if (Camera.main != null) _cameraTransform = Camera.main.transform;
+            if (Camera.main != null) 
+                _cameraTransform = Camera.main.transform;
         }
         
         public void Tick(float deltaTime)
@@ -21,7 +23,7 @@ namespace Utilities
             transform.LookAt(transform.position + _cameraTransform.rotation * Vector3.forward, _cameraTransform.rotation * Vector3.up);
         }
 
-        private void OnEnable() => GameUpdateManager.Instance.Register(this, UpdatePriority.Late);
-        private void OnDisable() => GameUpdateManager.Instance.Unregister(this);
+        private void OnEnable() => Services.Get<GameUpdateManager>().Register(this, UpdatePriority.Late);
+        private void OnDisable() => Services.Get<GameUpdateManager>().Unregister(this);
     }
 }

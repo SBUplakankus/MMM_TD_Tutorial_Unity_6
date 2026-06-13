@@ -1,3 +1,4 @@
+using Core;
 using Enums;
 using Interfaces;
 using Projectiles;
@@ -19,18 +20,23 @@ namespace Towers
         [SerializeField] private float fireRate = 1f;
         
         private TowerDetection _detection;
+        private ObjectPoolManager _poolManager;
         private float _fireCooldown;
 
         private void Fire()
         {
-            var projectileObj = ObjectPoolManager.Instance.GetProjectile(firePoint.position, firePoint.rotation);
+            var projectileObj = _poolManager.GetProjectile(firePoint.position, firePoint.rotation);
             var projectile = projectileObj.GetComponent<ProjectileBase>();
             launcher.LookAt(_detection.CurrentTarget.Position);
             projectile.Launch(_detection.CurrentTarget);
             _fireCooldown = fireRate;
         }
         
-        private void Awake() => _detection = GetComponent<TowerDetection>();
+        private void Awake()
+        {
+            _poolManager = Services.Get<ObjectPoolManager>();
+            _detection = GetComponent<TowerDetection>();
+        } 
         
         public void Tick(float deltaTime)
         { 
@@ -39,8 +45,8 @@ namespace Towers
             if (!_detection.HasTarget || !(_fireCooldown <= 0f)) return;
             Fire();
         }
-        private void OnEnable() => GameUpdateManager.Instance.Register(this, UpdatePriority.High);
-        private void OnDisable() => GameUpdateManager.Instance.Unregister(this);
+        private void OnEnable() => Services.Get<GameUpdateManager>().Register(this, UpdatePriority.High);
+        private void OnDisable() => Services.Get<GameUpdateManager>().Unregister(this);
 
         // TODO: Episode 08 — Replace Instantiate with pool Get
         // TODO: Episode 09 — Replace Instance with Services.Get

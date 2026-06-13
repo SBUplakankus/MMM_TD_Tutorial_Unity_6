@@ -1,3 +1,4 @@
+using Core;
 using Data;
 using Enemies.Components;
 using Enums;
@@ -48,7 +49,11 @@ namespace Enemies.Controllers
         public EnemyPath Path { get; private set; }
         public int CurrentWaypointIndex { get; set; }
         public Vector3 Position => transform.position;
-        public bool IsAlive => _health != null && _health.IsAlive;
+        public bool IsAlive => _health is { IsAlive: true };
+        public float PathProgress => Path != null
+            ? (float)CurrentWaypointIndex / Mathf.Max(Path.WaypointCount, 1)
+            : 0f;
+        public float CurrentHealth => _health?.CurrentHealth ?? 0f;
 
         private IHealthStrategy _health;
         private IMovementStrategy _movement;
@@ -86,13 +91,13 @@ namespace Enemies.Controllers
         private void Die()
         {
             _playerStats.AddGold(_goldGiven);
-            ObjectPoolManager.Instance.ReturnEnemy(this);
+            Services.Get<ObjectPoolManager>().ReturnEnemy(this);
         }
 
         private void HandleEndReached()
         {
             _playerStats.RemoveLives(_livesTaken);
-            ObjectPoolManager.Instance.ReturnEnemy(this);
+            Services.Get<ObjectPoolManager>().ReturnEnemy(this);
         }
         
         public void Tick(float deltaTime)
@@ -105,7 +110,7 @@ namespace Enemies.Controllers
             HandleEndReached();
         }
         
-        private void OnEnable() => GameUpdateManager.Instance.Register(this, UpdatePriority.High);
-        private void OnDisable() => GameUpdateManager.Instance.Unregister(this);
+        private void OnEnable() => Services.Get<GameUpdateManager>().Register(this, UpdatePriority.High);
+        private void OnDisable() => Services.Get<GameUpdateManager>().Unregister(this);
     }
 }

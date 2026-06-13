@@ -1,3 +1,4 @@
+using Core;
 using Enums;
 using Interfaces;
 using Systems.Managers;
@@ -31,7 +32,7 @@ namespace Projectiles
             if(target is IDamageable damageable)
                 damageable.TakeDamage(damage);
             
-            ObjectPoolManager.Instance.ReturnProjectile(this);
+            Services.Get<ObjectPoolManager>().ReturnProjectile(this);
         }
         
         public void Tick(float deltaTime)
@@ -39,7 +40,7 @@ namespace Projectiles
             _lifetimeTimer += deltaTime;
             if (_lifetimeTimer >= maxLifetime || Target is not { IsAlive: true })
             {
-                ObjectPoolManager.Instance.ReturnProjectile(this);
+                Services.Get<ObjectPoolManager>().ReturnProjectile(this);
                 return;
             }
 
@@ -56,8 +57,8 @@ namespace Projectiles
             transform.Translate(dir * step, Space.World);
         }
         
-        private void OnEnable() => GameUpdateManager.Instance.Register(this, UpdatePriority.High);
-        private void OnDisable() => GameUpdateManager.Instance.Unregister(this);
+        private void OnEnable() => Services.Get<GameUpdateManager>().Register(this, UpdatePriority.High);
+        private void OnDisable() => Services.Get<GameUpdateManager>().Unregister(this);
         
         // TODO: Episode 08 — Replace Destroy with object pool Return, add IPoolable
         // TODO: Episode 09 — Replace Instance with Services.Get

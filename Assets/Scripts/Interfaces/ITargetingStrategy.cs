@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Interfaces;
 using UnityEngine;
 
@@ -7,5 +8,6 @@ namespace Strategies.Targeting
 
     public interface ITargetingStrategy
     {
+        ITargetable GetTarget(IReadOnlyList<ITargetable> candidates, Vector3 towerPosition);
     }
 }

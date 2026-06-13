@@ -1,0 +1,7 @@
+WaveNumber,EnemyType,SpawnCount,Delay
+1,Koala,3,1.0
+1,Koala,2,2.0
+2,Koala,5,0.8
+2,Koala,4,1.5
+3,Koala,8,0.5
+3,Koala,6,1.0

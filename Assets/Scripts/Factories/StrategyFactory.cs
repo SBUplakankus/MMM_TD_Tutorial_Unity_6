@@ -1,8 +1,10 @@
+using System;
 using Data;
 using Enums;
 using Interfaces;
 using Strategies.Health;
 using Strategies.Movement;
+using Strategies.Targeting;
 
 namespace Factories
 {
@@ -33,5 +35,18 @@ namespace Factories
         }
         
         // TODO: Episode 12 — Add Shield + Regen cases to CreateHealth
+
+        public static ITargetingStrategy CreateTargeting(TargetingType type)
+        {
+            return type switch
+            {
+                TargetingType.Nearest   => new TargetClosest(),
+                TargetingType.First     => new TargetFirst(),
+                TargetingType.Last      => new TargetLast(),
+                TargetingType.Weakest   => new TargetWeakest(),
+                TargetingType.Strongest => new TargetStrongest(),
+                _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+            };
+        }
     }
 }

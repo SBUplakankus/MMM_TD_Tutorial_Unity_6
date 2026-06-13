@@ -9,7 +9,7 @@ namespace Interfaces
         bool IsAlive { get; }
         
         // TODO: Episode 13 — Add when building targeting strategies
-        // float PathProgress { get; }
-        // float CurrentHealth { get; }
+        float PathProgress { get; }
+        float CurrentHealth { get; }
     }
 }

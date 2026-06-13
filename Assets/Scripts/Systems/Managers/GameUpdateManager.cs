@@ -8,8 +8,6 @@ namespace Systems.Managers
 {
     public class GameUpdateManager : MonoBehaviour
     {
-        public static GameUpdateManager Instance { get; private set; }
-
         private readonly List<IUpdateable> _highPriorityUpdates = new();
         private readonly List<IUpdateable> _mediumPriorityUpdates = new();
         private readonly List<IUpdateable> _lowPriorityUpdates = new();
@@ -88,17 +86,6 @@ namespace Systems.Managers
             if (_lowPriorityUpdates.Remove(updateable)) return;
             if (_fixedPriorityUpdates.Remove(updateable)) return;
             _latePriorityUpdates.Remove(updateable);
-        }
-
-        private void Awake()
-        {
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            Instance = this;
         }
 
         private void Update()

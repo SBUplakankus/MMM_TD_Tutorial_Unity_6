@@ -14,8 +14,6 @@ namespace Systems.Managers
         // Instance singleton for now
         // TODO: Episode 09 — Remove Instance, access via Services.Get
         
-        public static ObjectPoolManager Instance { get; private set; }
-        
         [Header("Prefabs")]
         [SerializeField] private EnemyController enemyPrefab;
         [SerializeField] private ProjectileBase projectilePrefab;
@@ -111,14 +109,6 @@ namespace Systems.Managers
 
         private void Awake()
         {
-            if (Instance != null)
-            {
-                Destroy(gameObject);    
-                return;
-            }
-
-            Instance = this;
-
             InitPools();
         }
     }
